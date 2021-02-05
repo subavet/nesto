@@ -1,0 +1,1142 @@
+#ifndef MOTORSCONTROLLER_H
+#define MOTORSCONTROLLER_H
+
+#include "actuatorcontroller_global.h"
+#include <functional>
+#include <vector>
+#include "actuatordefine.h"
+#include <iostream>
+#include <typeindex>
+#include <typeinfo>
+//#include "innfosproxy.h"
+#include "CSignal.hpp"
+
+#ifdef _MSC_VER
+#define DEPRECATE_FUNC(f) __declspec(deprecated("** this is a deprecated function **")) f
+#elif defined(__GNUC__)
+#define DEPRECATE_FUNC(f) f __attribute__((deprecated("** this is a deprecated function **")))
+#else
+#pragma message(""WARNING: You need to implement DEPRECATED for this compiler"")
+#define DEPRECATE_FUNC(f) f
+#endif
+
+using namespace  std;
+using namespace Actuator;
+class ControllerUtil;
+#define controllerInst ActuatorController::getInstance()
+
+/**
+ * @brief The ActuatorController class Actuator controller class, all operations related to the actuator are in this class
+ */
+class ACTUATORCONTROLLERSHARED_EXPORT ActuatorController
+{
+public:
+	~ActuatorController();
+protected:
+	ActuatorController();
+public:
+	/**
+	 * @brief Unique actuator ID, composed of actuator ID (actuatorID) and actuator communication address (ipAddress)
+	 * @warning The actuator ID under the same communication address cannot be repeated, and the actuator ID under different communication addresses can be repeated
+	 */
+	struct UnifiedID
+	{
+		UnifiedID(uint8_t id,string ip):
+			actuatorID(id),
+			ipAddress(ip)
+		{}
+		uint8_t actuatorID=0;//actuator's ID
+		string ipAddress;//IP address used by actuator communication
+	};
+
+
+	/**
+	 * @brief initialize the controller, it must be initialized before using the controller
+	 */
+	static ActuatorController * initController();
+
+	/**
+	 * @brief finds all connected actuators
+	 * @param ec error code, if no available actuator is found, the corresponding error code will be returned
+	 * @return returns the UnifiedID of all found executors
+	 * @warning It takes some time to find the actuator
+	 **/
+	std::vector<UnifiedID> lookupActuators(Actuator::ErrorsDefine & ec);
+
+	/**
+	 * @brief Get the controller object
+	 * @return controller object
+	 */
+	static ActuatorController * getInstance();
+	/**
+	 * @brief handles controller events
+	 */
+	static void processEvents();
+
+	/**
+	 * @brief is there an actuator available
+	 **/
+	bool hasAvailableActuator()const;
+	/**
+	 * @brief Get all actuator Id array
+	 * @return id array
+	 **/
+	vector<uint8_t> getActuatorIdArray()const;
+
+	/**
+	 * @brief Get the UnifiedID array of all actuators
+	 * @return UnifiedID array
+	 **/
+	vector<UnifiedID> getActuatorUnifiedIDArray()const;
+
+	/**
+	 * @brief getUnifiedIDGroup getUnifiedIDGroup get the UnifiedID of all actuators under the specified ip address
+	 * @param ipAddress ip address string
+	 * @return returns all actuator IDs in the same communication unit
+	 */
+	vector<uint8_t> getUnifiedIDGroup(const string& ipAddress);
+
+	/**
+	 * @brief enables all actuators
+	 * @return All enable successfully return true, otherwise return false
+	 **/
+	bool enableAllActuators();
+	/**
+	 * @brief disable all actuators
+	 * @return returns true if all failures succeed, otherwise it returns false
+	 **/
+	bool disableAllActuators();
+
+	/**
+	 * @brief enables the specified actuator
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @warning
+	 **/
+	bool enableActuator(uint8_t id,const string & ipAddress="");
+	/**
+	 * @brief enables the specified actuator
+	 * @param unifiedIDArray executor UnifiedID array
+	 * @return If the actuator is enabled successfully, return true, otherwise return false
+	 **/
+	bool enableActuatorInBatch(const vector<UnifiedID>& unifiedIDArray);
+	/**
+	 * @brief disables the designated actuator
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return If the actuator is disabled successfully, return true, otherwise return false
+	 **/
+	bool disableActuator(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief activateActuatorMode activates the specified mode of a single actuator
+	 * @param id executor id
+	 * @param nMode specified activation mode
+	 * * @param ipAddress target ip address string
+	 */
+	void activateActuatorMode(uint8_t id, const Actuator::ActuatorMode nMode,const string&ipAddress="");
+
+	/**
+	 * @brief activates the specified mode of the actuator
+	 * @param idArray actuator id array
+	 * @param nMode the mode to be activated
+	 **/
+	void activateActuatorModeInBantch(vector<uint8_t> idArray, const Actuator::ActuatorMode nMode);
+	/**
+	 * @brief activates the specified mode of the actuator
+	 * @param UnifiedIDArray executor UnifiedID array
+	 * @param nMode the mode to be activated
+	 **/
+	void activateActuatorModeInBantch(vector<UnifiedID> UnifiedIDArray, const Actuator::ActuatorMode nMode);
+	/**
+	 * @brief Turn on or off the automatic refresh function of the actuator, and automatically request the actuator current, speed, position, voltage, temperature, and inverter temperature (this function is turned off by default)
+	 * @param id executor id
+	 * @param bOpen is open
+	 * @param ipAddress target ip address string
+	 **/
+	void switchAutoRefresh(uint8_t id,bool bOpen,const string & ipAddress="");
+
+	/**
+	 * @brief set the automatic refresh interval (the default interval is 1s)
+	 * @param id executor id
+	 * @param mSec milliseconds
+	 * @param ipAddress target ip address string
+	 **/
+	void setAutoRefreshInterval(uint8_t id, uint32_t mSec,const string & ipAddress="");
+
+	//position loop
+	/**
+	 * @brief set location
+	 * @param id executor id
+	 * @param pos target position, the unit is the number of turns
+	 * @param ipAddress target ip address string
+	 **/
+	void setPosition(uint8_t id,double pos,const string & ipAddress="");
+
+	/**
+	 * @brief Get the current position
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a position read and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return current position, the unit is revolution
+	 **/
+	double getPosition(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief sets the ratio of the position loop
+	 * @param id executor id
+	 * @param Kp ratio of position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionKp(uint8_t id,double Kp,const string & ipAddress="");
+	/**
+	 * @brief gets the ratio of the position ring
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the ratio of the position loop once, and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return ratio of position loop
+	 */
+	double getPositionKp(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief sets the integral of the position loop
+	 * @param id executor id
+	 * @param Ki integral of position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionKi(uint8_t id,double Ki,const string & ipAddress="");
+
+	/**
+	 * @brief Get the integral of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a position loop integration and wait for the return, if it is false, it will immediately return the result of the last requested position return
+	 * @param ipAddress target ip address string
+	 * @return integral of position loop
+	 */
+	double getPositionKi(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief sets the differential of the position loop
+	 * @param id executor id
+	 * @param Kd Differential of position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionKd(uint8_t id,double Kd,const string & ipAddress="");
+	/**
+	 * @brief Get the differential of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a differential of the position loop and wait for the return, if it is false, it will immediately return the result of the most recent request position return
+	 * @param ipAddress target ip address string
+	 * @return Differential of position loop
+	 */
+	double getPositionKd(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief set the maximum output limit of the position loop
+	 * @param id executor id
+	 * @param max The maximum output limit of the position loop, the valid value range is (0,1)
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionUmax(uint8_t id,double max,const string & ipAddress="");
+	/**
+	 * @brief Get the maximum output limit of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a maximum output limit and wait for the return, if it is false, it will immediately return the result returned from the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Maximum output limit of position loop
+	 */
+	double getPositionUmax(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the minimum output limit of the position loop
+	 * @param id executor id
+	 * @param min The minimum output limit of the position loop, the effective value range is (-1,0)
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionUmin(uint8_t id,double min,const string & ipAddress="");
+
+	/**
+	 * @brief Get the minimum output limit of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a minimum output limit and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return The minimum output limit of the position loop
+	 */
+	double getPositionUmin(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the limit offset of the position loop
+	 * @param id executor id
+	 * @param offset limit offset of position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionOffset(uint8_t id, double offset, const string & ipAddress="");
+	/**
+	 * @brief Get the limit offset of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a limit offset and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return Limit offset of position loop
+	 */
+	double getPositionOffset(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the maximum limit of the position loop
+	 * @param id executor id
+	 * @param maxPos Maximum limit of position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setMaximumPosition(uint8_t id,double maxPos,const string & ipAddress="");
+
+	/**
+	 * @brief Get the maximum limit of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the maximum limit once and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Maximum limit of position loop
+	 */
+	double getMaximumPosition(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the minimum limit of the position loop
+	 * @param id executor id
+	 * @param minPos The minimum limit of the position loop
+	 * @param ipAddress target ip address string
+	 */
+	void setMinimumPosition(uint8_t id,double minPos,const string & ipAddress="");
+	/**
+	 * @brief Get the minimum limit of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the minimum limit once and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return The minimum limit of the position loop
+	 */
+	double getMinimumPosition(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief enables/disables the actuator limit function, the speed mode and current mode will not be affected by the limit position after disabling
+	 * @param id executor id
+	 * @param enable enable/disable
+	 * @param ipAddress ipAddress target ip address string
+	 */
+	void enablePositionLimit(uint8_t id, bool enable, const string & ipAddress="");
+
+	/**
+	 * @brief Read enable/disable of actuator limit function
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a limit function enable/disable, and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return
+	 */
+	bool isPositionLimitEnable(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the zero position of the actuator
+	 * @param id executor id
+	 * @param homingPos zero position of the actuator
+	 * @param ipAddress target ip address string
+	 */
+	void setHomingPosition(uint8_t id,double homingPos,const string & ipAddress="");
+	/**
+	 * @brief Enable/disable the position loop filter function, which is a first-order low-pass filter
+	 * @param id executor id
+	 * @param enable enable/disable
+	 * @param ipAddress ipAddress target ip address string
+	 */
+	void enablePositionFilter(uint8_t id,bool enable,const string & ipAddress="");
+	/**
+	 * @brief Read the enable/disable of the filter function of the execution position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a position loop filter function enable/disable, and wait for the return, if it is false, it will immediately return the result of the latest request
+	 * @param ipAddress target ip address string
+	 * @return
+	 */
+	bool isPositionFilterEnable(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get the low-pass filter frequency of the position loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a low-pass filter frequency and wait for the return, if it is false, it will immediately return the result of the most recent request location
+	 * @param ipAddress target ip address string
+	 * @return Position loop low-pass filter frequency
+	 */
+	double getPositionCutoffFrequency(uint8_t id, bool bRefresh, const string &ipAddress="") const;
+	/**
+	 * @brief set the low-pass filter frequency of the position loop
+	 * @param id executor id
+	 * @param frequency Position loop low-pass filter frequency
+	 * @param ipAddress target ip address string
+	 */
+	void setPositionCutoffFrequency(uint8_t id, double frequency, const string &ipAddress="");
+	/**
+	 * @brief clears homing information, including left and right limits and 0 bits
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	void clearHomingInfo(uint8_t id,const string & ipAddress="");
+	//profile position
+	/**
+	 * @brief set the acceleration of Profile position mode
+	 * @param id executor id
+	 * @param acceleration Profile position mode acceleration
+	 * @param ipAddress target ip address string
+	 */
+	void setProfilePositionAcceleration(uint8_t id, double acceleration, const string & ipAddress="");
+
+	/**
+	 * @brief Get the acceleration of Profile position mode
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the acceleration of the profile position mode and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return Profile position mode acceleration
+	 */
+	double getProfilePositionAcceleration(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the deceleration of Profile position mode
+	 * @param id executor id
+	 * @param deceleration Profile position mode deceleration
+	 * @param ipAddress target ip address string
+	 */
+	void setProfilePositionDeceleration(uint8_t id, double deceleration, const string & ipAddress="");
+	/**
+	 * @brief Get the deceleration of Profile position mode
+	 * @param id executor id
+	 * @param bRefresh Does it need to be refreshed? If it is true, it will automatically request a deceleration of the profile position mode and wait for the return. If it is false, it will immediately return the result of the last requested position.
+	 * @param ipAddress target ip address string
+	 * @return Profile position mode deceleration
+	 */
+	double getProfilePositionDeceleration(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief sets the maximum speed of Profile position mode
+	 * @param id executor id
+	 * @param maxVelocity Profile position mode maximum velocity
+	 * @param ipAddress target ip address string
+	 */
+	void setProfilePositionMaxVelocity(uint8_t id, double maxVelocity, const string & ipAddress="");
+	/**
+	 * @brief Get the maximum speed of Profile position mode
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the maximum speed of Profile position mode once and wait for the return, if it is false, it will immediately return the result of the most recent request position return
+	 * @param ipAddress target ip address string
+	 * @return Maximum speed of Profile position mode
+	 */
+	double getProfilePositionMaxVelocity(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	//velocity loop
+	/**
+	 * @brief set speed
+	 * @param id executor id
+	 * @param vel target speed, the unit is revolutions per minute
+	 * @param ipAddress target ip address string
+	 **/
+	void setVelocity(uint8_t id,double vel,const string & ipAddress="");
+
+	/**
+	 * @brief Get current speed
+	 * @param id executor id
+	 * @param bRefresh Does it need to be refreshed? If it is true, it will automatically request a speed read and wait for the return. If it is false, it will immediately return the result of the most recent request for speed.
+	 * @param ipAddress target ip address string
+	 * @return current speed, the unit is revolutions per minute
+	 **/
+	double getVelocity(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Get speed loop ratio
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a speed loop ratio reading and wait for the return, if it is false, it will immediately return the result of the latest request speed loop ratio return
+	 * @param ipAddress target ip address string
+	 * @return current speed loop ratio
+	 **/
+	double getVelocityKp(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set speed loop ratio
+	 * @param id executor id
+	 * @param Kp speed loop ratio
+	 * @param ipAddress target ip address string
+	 **/
+	void setVelocityKp(uint8_t id,double Kp,const string & ipAddress="");
+
+	/**
+	 * @brief Get speed loop integral
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a speed loop integral reading and wait for the return, if it is false, it will immediately return the result of the most recent request for speed loop integral.
+	 * @param ipAddress target ip address string
+	 * @return current velocity loop integral
+	 **/
+	double getVelocityKi(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief setVelocityKi set velocity loop integral
+	 * @param id executor id
+	 * @param Ki points
+	 * @param ipAddress target ip address string
+	 * @return Set success or failure
+	 */
+	void setVelocityKi(uint8_t id, double Ki, const string &ipAddress="");
+
+	/**
+	 * @brief Get the maximum output limit of the speed loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a speed loop maximum output limit reading, and wait for the return, if it is false, it will immediately return the result of the most recent request for the speed loop maximum output limit
+	 * @param ipAddress target ip address string
+	 * @return Maximum output limit
+	 **/
+	double getVelocityUmax(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the maximum output limit of the speed loop
+	 * @param id executor id
+	 * @param max Maximum output limit, valid value range is (0,1]
+	 * @param ipAddress target ip address string
+	 * @return Set success or failure
+	 */
+	void setVelocityUmax(uint8_t id, double max, const string &ipAddress="");
+
+	/**
+	 * @brief Get the minimum output limit of the speed loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a speed loop minimum output limit read and wait for the return, if it is false, it will immediately return the result of the most recent request for the speed loop minimum output limit.
+	 * @param ipAddress target ip address string
+	 * @return minimum output limit
+	 **/
+	double getVelocityUmin(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief set the minimum output limit of the speed loop
+	 * @param id executor id
+	 * @param min minimum output limit, valid value range is (-1,0)
+	 * @param ipAddress target ip address string
+	 * @return Set success or failure
+	 */
+	void setVelocityUmin(uint8_t id, double min, const string &ipAddress="");
+	/**
+	 * @brief Get actuator speed range, unit RPM
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the actuator speed range once and wait for the return, if it is false, it will immediately return the result of the most recent request
+	 * @param ipAddress target ip address string
+	 * @return Actuator speed range
+	 */
+	double getVelocityRange(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Enable/disable the speed loop filter function, which is a first-order low-pass filter
+	 * @param id executor id
+	 * @param enable enable/disable
+	 * @param ipAddress ipAddress target ip address string
+	 */
+	void enableVelocityFilter(uint8_t id,bool enable,const string & ipAddress="");
+	/**
+	 * @brief read enable/disable of speed loop filter function
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a speed loop filter function enable/disable, and wait for the return, if it is false, it will immediately return the result of the most recent request position return
+	 * @param ipAddress target ip address string
+	 * @return Speed ??loop filter function enable/disable
+	 */
+	bool isVelocityFilterEnable(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get speed loop low-pass filter frequency
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a low-pass filter frequency and wait for the return, if it is false, it will immediately return the result of the most recent request location
+	 * @param ipAddress target ip address string
+	 * @return Speed ??loop low-pass filter frequency
+	 */
+	double getVelocityCutoffFrequency(uint8_t id, bool bRefresh, const string &ipAddress="") const;
+	/**
+	 * @brief set the speed loop low-pass filter frequency
+	 * @param id executor id
+	 * @param frequency Speed ??loop low-pass filter frequency
+	 * @param ipAddress target ip address string
+	 */
+	void setVelocityCutoffFrequency(uint8_t id, double frequency, const string &ipAddress="");
+	/**
+	 * @brief set actuator speed limit
+	 * @param id executor id
+	 * @param limit Actuator speed limit, the unit is RPM, the value will not exceed the speed range
+	 * @param ipAddress target ip address string
+	 */
+	void setVelocityLimit(uint8_t id,double limit,const string & ipAddress="");
+	/**
+	 * @brief Get the actuator speed limit
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the speed limit of the actuator once and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return actuator speed limit
+	 */
+	double getVelocityLimit(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	//profile velocity
+	/**
+	 * @brief set the acceleration of Profile velocity mode
+	 * @param id executor id
+	 * @param acceleration Profile acceleration in velocity mode
+	 * @param ipAddress target ip address string
+	 */
+	void setProfileVelocityAcceleration(uint8_t id,double acceleration,const string & ipAddress="");
+	/**
+	 * @brief Get the acceleration in Profile velocity mode
+	 * @param id executor id
+	 * @param bRefresh Does it need to be refreshed? If it is true, it will automatically request the acceleration of the Profile velocity mode and wait for the return. If it is false, it will immediately return the result of the last requested position.
+	 * @param ipAddress target ip address string
+	 * @return Profile velocity mode acceleration
+	 */
+	double getProfileVelocityAcceleration(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the deceleration of Profile velocity mode
+	 * @param id executor id
+	 * @param deceleration Profile velocity mode deceleration
+	 * @param ipAddress target ip address string
+	 */
+	void setProfileVelocityDeceleration(uint8_t id,double deceleration,const string & ipAddress="");
+	/**
+	 * @brief Get the deceleration of Profile velocity mode
+	 * @param id executor id
+	 * @param bRefresh Does it need to be refreshed? If it is true, it will automatically request a deceleration in Profile velocity mode and wait for the return. If it is false, it will immediately return the result of the last requested position.
+	 * @param ipAddress target ip address string
+	 * @return Profile velocity mode deceleration
+	 */
+	double getProfileVelocityDeceleration(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	//current loop
+	/**
+	 * @brief set current
+	 * @param id executor id
+	 * @param current target current, the unit is A
+	 * @param ipAddress target ip address string
+	 **/
+	void setCurrent(uint8_t id,double current,const string & ipAddress="");
+
+	/**
+	 * @brief Get current current
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a current reading and wait for the return, if it is false, it will immediately return the result of the most recent request for current return
+	 * @param ipAddress target ip address string
+	 * @return current current, the unit is A
+	 **/
+	double getCurrent(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Get current loop ratio
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a current loop ratio reading and wait for the return, if it is false, it will immediately return the result of the most recent request for current loop ratio return
+	 * @param ipAddress target ip address string
+	 * @return Current current loop ratio
+	 **/
+	double getCurrentKp(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Get current loop integral
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a current loop integration read and wait for the return, if it is false, it will immediately return the result of the last request for current loop integration.
+	 * @param ipAddress target ip address string
+	 * @return current current loop integral
+	 **/
+	double getCurrentKi(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get actuator current range, unit A
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the actuator current range once and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return Actuator current range
+	 */
+	double getCurrentRange(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Enable/disable the current loop filter function, which is a first-order low-pass filter
+	 * @param id executor id
+	 * @param enable enable/disable
+	 * @param ipAddress ipAddress target ip address string
+	 */
+	void enableCurrentFilter(uint8_t id,bool enable,const string & ipAddress="");
+	/**
+	 * @brief read the current loop filter function enable/disable
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a current loop filter function enable/disable, and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return Current loop filter function enable/disable
+	 */
+	bool isCurrentFilterEnable(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get the low-pass filter frequency of the current loop
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request a low-pass filter frequency and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Current loop low-pass filter frequency
+	 */
+	double getCurrentCutoffFrequency(uint8_t id, bool bRefresh, const string &ipAddress="") const;
+	/**
+	 * @brief set the current loop low-pass filter frequency
+	 * @param id executor id
+	 * @param frequency Current loop low-pass filter frequency
+	 * @param ipAddress target ip address string
+	 */
+	void setCurrentCutoffFrequency(uint8_t id, double frequency, const string &ipAddress="");
+	/**
+	 * @brief set actuator current limit
+	 * @param id executor id
+	 * @param limit actuator current limit, the unit is A, the value will not exceed the current range
+	 * @param ipAddress target ip address string
+	 */
+	void setCurrentLimit(uint8_t id,double limit,const string & ipAddress="");
+	/**
+	 * @brief Get actuator current limit
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the current limit of the actuator and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Actuator current limit
+	 */
+	double getCurrentLimit(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief executor saves all current parameters. If the parameters are not saved after modification, the parameter modification will be discarded after disabling
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return returns true if saved successfully, otherwise false
+	 **/
+	bool saveAllParams(uint8_t id,const string & ipAddress="");
+
+	//chart info
+	void setChartFrequency(uint8_t id, double frequency, const string & ipAddress="");
+	double getChartFrequency(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	void setChartThreshold(uint8_t id, double threshold, const string & ipAddress="");
+	double getChartThreshold(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	void enableChart(uint8_t id,bool enable,const string & ipAddress="");
+	bool isChartEnable(uint8_t id,bool bRefresh,const string & ipAddress="");
+	/**
+	 * @brief open chart specified channel
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @param nChannelId channel id (Actuator::channel_1 to Actuator::channel_4)
+	 **/
+	void openChartChannel(uint8_t id,uint8_t nChannelId,const string & ipAddress="");
+
+	/**
+	 * @brief Close chart specified channel
+	 * @param id executor id
+	 * @param nChannelId channel id (Actuator::channel_1 to Actuator::channel_4)
+	 * @param ipAddress target ip address string
+	 **/
+	void closeChartChannel(uint8_t id, uint8_t nChannelId,const string & ipAddress="");
+
+
+	/**
+	 * @brief setCurrentChartMode Set the current mode graphic display mode, there are Actuator::IQ_CHART and Actuator::ID_CHART two modes
+	 * @param id executor id
+	 * @param mode Graphic display mode
+	 */
+	void setCurrentChartMode(uint8_t id, uint8_t mode);
+	/**
+	 * @brief setCurrentChartMode Set current mode graphic display mode, there are Actuator::IQ_CHART and Actuator::ID_CHART two modes
+	 * @param longId executor long id
+	 * @param mode Graphic display mode
+	 */
+	void setCurrentChartMode(uint64_t longId, uint8_t mode);
+
+	//other info
+	/**
+	 * @brief Get the actuator voltage
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the actuator voltage once and wait for the return, if it is false, it will immediately return the result of the most recent request
+	 * @param ipAddress target ip address string
+	 * @return Actuator voltage
+	 */
+	double getVoltage(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get the energy of actuator stall
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the actuator stall energy and wait for it to return, if it is false, it will immediately return the result of the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Actuator locked-rotor energy, unit J
+	 */
+	double getLockEnergy(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set the actuator stall energy
+	 * @param id executor id
+	 * @param energy Actuator locked-rotor energy, unit J
+	 * @param ipAddress target ip address string
+	 */
+	void setLockEnergy(uint8_t id,double energy,const string & ipAddress="");
+	/**
+	 * @brief Get motor temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the motor temperature once and wait for the return, if it is false, it will immediately return the result of the most recent request position return
+	 * @param ipAddress target ip address string
+	 * @return Motor temperature, unit ?
+	 */
+	double getMotorTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief Get the inverter temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the inverter temperature once and wait for it to return, if it is false, it will immediately return the result of the last requested location
+	 * @param ipAddress target ip address string
+	 * @return Inverter temperature, unit ?
+	 */
+	double getInverterTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get motor protection temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the motor protection temperature once and wait for the return, if it is false, it will immediately return the result returned by the most recent request position
+	 * @param ipAddress target ip address string
+	 * @return Motor protection temperature, unit ?
+	 */
+	double getMotorProtectedTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set motor protection temperature
+	 * @param id executor id
+	 * @param temp Motor protection temperature
+	 * @param ipAddress target ip address string
+	 */
+	void setMotorProtectedTemperature(uint8_t id,double temp,const string & ipAddress="");
+	/**
+	 * @brief Get the motor recovery temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the motor to recover the temperature once and wait for the return, if it is false, it will immediately return the result of the last requested position
+	 * @param ipAddress target ip address string
+	 * @return Motor recovery temperature, unit ?
+	 */
+	double getMotorRecoveryTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+
+	/**
+	 * @brief set the motor recovery temperature
+	 * @param id executor id
+	 * @param temp Motor recovery temperature
+	 * @param ipAddress target ip address string
+	 */
+	void setMotorRecoveryTemperature(uint8_t id,double temp,const string & ipAddress="");
+	/**
+	 * @brief Get inverter protection temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the inverter protection temperature once and wait for the return, if it is false, it will immediately return the result of the last requested location
+	 * @param ipAddress target ip address string
+	 * @return Inverter protection temperature, unit ?
+	 */
+	double getInverterProtectedTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set inverter protection temperature
+	 * @param id executor id
+	 * @param temp Inverter protection temperature
+	 * @param ipAddress target ip address string
+	 */
+	void setInverterProtectedTemperature(uint8_t id,double temp,const string & ipAddress="");
+
+	/**
+	 * @brief Get the inverter recovery temperature
+	 * @param id executor id
+	 * @param bRefresh Whether it needs to be refreshed, if it is true, it will automatically request the inverter to restore the temperature once and wait for the return, if it is false, it will immediately return the result returned by the most recent request location
+	 * @param ipAddress target ip address string
+	 * @return Inverter recovery temperature, unit ?
+	 */
+	double getInverterRecoveryTemperature(uint8_t id,bool bRefresh,const string & ipAddress="")const;
+	/**
+	 * @brief set inverter recovery temperature
+	 * @param id executor id
+	 * @param temp Inverter recovery temperature
+	 * @param ipAddress target ip address string
+	 */
+	void setInverterRecoveryTemperature(uint8_t id,double temp,const string & ipAddress="");
+	/**
+	 * @brief is the actuator online
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return online status
+	 */
+	bool isOnline(uint8_t id,const string & ipAddress="")const;
+	/**
+	 * @brief Whether the actuator has been enabled
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return is enabled
+	 */
+	bool isEnable(uint8_t id,const string & ipAddress="")const;
+
+	/**
+	 * @brief enables the heartbeat function of the actuator, and automatically refreshes the online status and errors of the actuator after it is enabled (the default state is enabled)
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 */
+	void enableHeartbeat(uint8_t id,const string & ipAddress="")const;
+	/**
+	 * @brief Disabled actuator heartbeat function, after disabling, it will automatically refresh the online status and error of the actuator
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 */
+	void disableHeartbeat(uint8_t id,const string & ipAddress="")const;
+	/**
+	 * @brief set actuator ID
+	 * @param currentID current executor id
+	 * @param newID executor new ID
+	 * @param ipAddress target ip address string
+	 * @return whether the modification is successful
+	 */
+	bool setActuatorID(uint8_t currentID, uint8_t newID, const string & ipAddress="");
+	/**
+	 * @brief Get the actuator serial number
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return actuator serial number
+	 */
+	uint32_t getActuatorSerialNumber(uint8_t id,const string & ipAddress="")const;
+
+	/**
+	 * @brief Get the current mode of the actuator
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return current mode
+	 */
+	Actuator::ActuatorMode getActuatorMode(uint8_t id,const string & ipAddress="")const;
+	/**
+	 * @brief Get the actuator error code
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 * @return error code
+	 */
+	uint32_t getErrorCode(uint8_t id,const string & ipAddress="")const;
+	/**
+	 * @brief gets the attributes again and will request to refresh the attributes
+	 * @param id executor id
+	 * @param attrId actuator attribute Id
+	 * @param ipAddress target ip address string
+	 **/
+	void regainAttribute(uint8_t id,uint8_t attrId,const string & ipAddress="");
+
+	/**
+	 * @brief Get actuator error history
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	vector<uint16_t> getErrorHistory(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief actuator is disconnected and reconnected
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	void reconnect(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief actuator error removal
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	void clearError(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief versionString Get the sdk version number string
+	 * @return sdk version number string
+	 */
+	string versionString()const;
+
+
+	/**
+	 * @brief requestCVPValue Get the value of the current speed position (if three values ??are required at the same time, the interface efficiency is relatively high)
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 */
+	void requestCVPValue(uint8_t id,const string & ipAddress=""); /**
+	 * @brief actuator is disconnected and reconnected
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	void reconnect(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief actuator error removal
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 **/
+	void clearError(uint8_t id,const string & ipAddress="");
+
+	/**
+	 * @brief versionString Get the sdk version number string
+	 * @return sdk version number string
+	 */
+	string versionString()const;
+
+
+	/**
+	 * @brief requestCVPValue Get the value of the current speed position (if three values ??are required at the same time, the interface efficiency is relatively high)
+	 * @param id executor id
+	 * @param ipAddress target ip address string
+	 */
+	void requestCVPValue(uint8_t id,const string & ipAddress="");
+
+	using doubleFuncPointer = void(*)(UnifiedID, uint8_t ,double);
+	using stringFuncPointer = void(*)(UnifiedID, uint16_t ,string);
+	using doubleFunction = function<void(UnifiedID, uint8_t ,double)>;
+	using stringFunction = function<void(UnifiedID, uint16_t ,string)>;
+
+	/**
+	 * @brief addParaRequestCallback adds a parameter request callback function, when the parameter request returns the result, the callback will be triggered
+	 * @param callback callback function pointer
+	 */
+	void addParaRequestCallback(doubleFuncPointer callback);
+	/**
+	 * @brief addParaRequestCallback adds parameter request callback function, when the parameter request returns the result, the callback will be triggered
+	 * @param callback function
+	 */
+	void addParaRequestCallback(doubleFunction callback);
+	/**
+	 * @brief addErrorCallback adds an error callback function, which will trigger the callback when an error occurs in the actuator
+	 * @param callback callback function pointer
+	 * @warning When the heartbeat is disabled, no error will be reported after calling disableHeartbeat
+	 */
+	void addErrorCallback(stringFuncPointer callback);
+	/**
+	 * @brief addErrorCallback adds an error callback function, which will trigger the callback when an error occurs in the actuator
+	 * @param callback function
+	 * @warning When the heartbeat is disabled, no error will be reported after calling disableHeartbeat
+	 */
+	void addErrorCallback(stringFunction callback);
+
+	/**
+	 * @brief clearCallbackHandlers clear all callbacks
+	 */
+	void clearCallbackHandlers();
+
+#ifdef IMU_ENABLE
+	/**
+	 * @brief requestAllQuaternions request whole body inertial navigation module data
+	 * @param longId Inertial navigation module receiving board id
+	 */
+	void requestAllQuaternions(uint64_t longId=0);
+	/**
+	 * @brief requestSingleQuaternion request a single inertial navigation module
+	 * @param longId INS module id
+	 */
+	void requestSingleQuaternion(uint64_t longId=0);
+	// void requestQuaternion(const std::string & target);
+	/**
+	 * @brief receiveQuaternion receive inertial navigation module data
+	 * @param nIMUId inertial navigation module id
+	 * @param w
+	 * @param x
+	 * @param y
+	 * @param z
+	 */
+	void receiveQuaternion(uint64_t nIMUId,double w,double x,double y,double z);
+	void requestLossRatio();
+	void receiveLossRatio(uint64_t nIMUId,uint32_t receive,uint32_t lost);
+#endif
+	void setActuatorAttribute(uint64_t longId,Actuator::ActuatorAttribute attrId,double value);
+	void setActuatorAttribute(uint8_t id,Actuator::ActuatorAttribute attrId,double value,const string & ipAddress="");
+	double getActuatorAttribute(uint64_t longId,Actuator::ActuatorAttribute attrId)const;
+	double getActuatorAttribute(uint8_t id,Actuator::ActuatorAttribute attrId,const string & ipAddress="")const;
+private:
+	//v3.0 add end
+	void switchCalibrationVel(uint64_t longId,uint8_t nValue);
+	void switchCalibration(uint64_t longId,uint8_t nValue);
+	void startCalibration(uint64_t longId);
+	void sendCmd(uint64_t longId,uint16_t cmdId,uint32_t value);
+	bool setActuatorAttributeWithACK(uint64_t longId, ActuatorAttribute attrId, double value);
+	void clearError(uint64_t longId);
+	void reconnect(uint64_t longId);
+	vector<uint16_t> getErrorHistory(uint64_t longId);
+	void regainAttribute(uint64_t longId,uint8_t attrId);
+	void switchChartAllChannel(uint64_t longId,bool bOn);
+	void closeChartChannel(uint64_t longId, uint8_t nChannelId);
+	void openChartChannel(uint64_t longId,uint8_t  nChannelId);
+	void setMinPosLimit(uint64_t longId,double posValue);
+	void setMinPosLimit(uint64_t longId);
+	void setHomingOperationMode(uint8_t id,uint8_t nMode);
+	void setHomingOperationMode(uint64_t longId,uint8_t nMode);
+	void clearHomingInfo(uint64_t longId);
+	bool saveAllParams(uint64_t id);
+
+	double getCurrent(uint64_t longId,bool bRefresh=false)const;
+	double getVelocity(uint64_t longId,bool bRefresh=false)const;
+	double getPosition(uint64_t longId,bool bRefresh=false)const;
+	void setCurrent(uint64_t longId,double current) ;
+	void setVelocity(uint64_t longId,double vel);
+	void setPosition(uint64_t longId, double pos);
+	void setAutoRefreshInterval(uint64_t longId, uint32_t mSec);
+	void switchAutoRefresh(uint64_t longId, bool bOpen);
+	//void activateActuatorMode(uint64_t id, const Actuator::ActuatorMode nMode);
+	vector<uint64_t> getActuatorIdGroup(uint64_t longId)const;
+	void autoRecoginze();
+	void finishRecognizeCallback();
+	void onRequestCallback(uint64_t longId, uint8_t nProxyId,double value);
+	void errorOccur(uint64_t longId,uint16_t errorId, std::string errorStr);
+	void motorAttrChanged(uint64_t longId,uint8_t attrId,double value);
+	void startNewChart();
+	void chartValueChange(uint8_t channelId,double value);
+	void startLog();
+	void stopLog();
+	uint32_t ipToUint(const string & ipAddress);
+
+	/**
+	 * @brief converts ip address string and id to grow id
+	 * @param ipAddress target ip address string
+	 * @param id id
+	 * @return corresponds to long id
+	 * @warning This interface only supports Ethernet communication
+	 */
+	static uint64_t toLongId(uint8_t id,const string &ipAddress="");
+	/**
+	 * @brief converts long id into ip address string
+	 * @param longId long id
+	 * @return ip address string
+	 * @warning This interface only supports Ethernet communication
+	 */
+	static std::string toString(uint64_t longId);
+	/**
+	 * @brief long id converted to id
+	 * @param longId long id
+	 * @return id
+	 */
+	static uint8_t toByteId(uint64_t longId);
+private:
+
+	class GC{
+	public:
+		~GC()
+		{
+
+			if(m_pInstance!=nullptr)
+			{
+				delete m_pInstance;
+				m_pInstance = nullptr;
+			}
+		}
+		static GC gc;
+	};
+
+private:
+	int m_nLaunchMotorsCnt;
+public:
+	//signals
+	/**
+	 * @brief m_sOperationFinished operation completion signal <uint8_t executor id, uint8_t operation type, type enumeration OperationFlags>
+	 */
+	CSignal<uint8_t,uint8_t> *m_sOperationFinished;
+	CSignal<uint64_t,uint8_t> *m_sOperationFinishedL;
+	/**
+	 * @brief m_sRequestBack Request return signal <uint8_t actuator id, uint8_t request protocol id, double return value>
+	 */
+	CSignal<uint8_t,uint8_t,double> *m_sRequestBack;
+	CSignal<uint64_t,uint8_t,double> *m_sRequestBackL;
+
+	/**
+	 * @brief m_sError error signal <uint8_t actuator id, uint16_t error id, std::string error message>
+	 */
+	CSignal<uint8_t,uint16_t,std::string> *m_sError;
+	CSignal<uint64_t,uint16_t,std::string> *m_sErrorL;
+	/**
+	 * @brief m_sActuatorAttrChanged The signal will be triggered after the motor data changes, auto refresh or active refresh return
+	 * <uint8_t actuator id, uint8_t change attribute id, double attribute value>
+	 */
+	CSignal<uint8_t,uint8_t,double> *m_sActuatorAttrChanged;
+	CSignal<uint64_t,uint8_t,double> *m_sActuatorAttrChangedL;
+	/**
+	 * @brief m_sNewChartStart graphic display signal
+	 */
+	CSignal<> *m_sNewChartStart;
+	/**
+	 * @brief m_sChartValueChange Graphic display data
+	 */
+	CSignal<uint8_t,double> *m_sChartValueChange;
+#ifdef IMU_ENABLE
+	CSignal<uint8_t,double,double,double,double> *m_sQuaternion;
+	CSignal<uint64_t,double,double,double,double> *m_sQuaternionL;
+	CSignal<uint8_t,uint32_t,uint32_t> * m_sLossRatio;
+#endif
+
+private:
+	static ActuatorController * m_pInstance;
+	std::vector<int> *m_lConnectionIds;
+	bool m_bInitFinished;
+	Actuator::ErrorsDefine _errorCode;
+	int m_nLogPid;
+	ControllerUtil * util;
+};
+
+#endif // MOTORSCONTROLLER_H
